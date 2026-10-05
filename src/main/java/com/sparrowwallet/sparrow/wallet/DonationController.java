@@ -1,8 +1,15 @@
 package com.sparrowwallet.sparrow.wallet;
 
 import java.util.List;
+import java.util.regex.Pattern;
 
 import com.sparrowwallet.drongo.BitcoinUnit;
+import com.sparrowwallet.drongo.protocol.Transaction;
+import com.sparrowwallet.drongo.protocol.TransactionOutput;
+import com.sparrowwallet.drongo.silentpayments.SilentPayment;
+import com.sparrowwallet.drongo.silentpayments.SilentPaymentAddress;
+import com.sparrowwallet.sparrow.UnitFormat;
+import com.sparrowwallet.sparrow.io.Config;
 
 import javafx.fxml.FXML;
 import javafx.scene.control.ComboBox;
@@ -50,5 +57,92 @@ public class DonationController {
 
     public BitcoinUnit getAmountUnit() {
         return amountUnit.getValue();
+    }
+
+    private Long getDonationValueSats() {
+        BitcoinUnit bitcoinUnit = getAmountUnit();
+
+        if (amount.getText() != null && !amount.getText().isEmpty() && bitcoinUnit != null) {
+            UnitFormat unitFormat = Config.get().getUnitFormat() == null
+                    ? UnitFormat.DOT
+                    : Config.get().getUnitFormat();
+
+            double fieldValue = Double.parseDouble(
+                    amount.getText()
+                            .replaceAll(Pattern.quote(unitFormat.getGroupingSeparator()), "")
+                            .replaceAll(",", ".")
+            );
+
+            return bitcoinUnit.getSatsValue(fieldValue);
+        }
+
+        return null;
+    }
+
+    public SilentPayment getDonationPayment() {
+        DonationContact selectedContact = getSelectedContact();
+        Long value = getDonationValueSats();
+
+        if (selectedContact == null
+                || value == null
+                || value < getDonationDustThreshold()) {
+            throw new IllegalStateException("Invalid donation specified");
+        }
+
+        try {
+            SilentPaymentAddress silentPaymentAddress
+                    = SilentPaymentAddress.from(selectedContact.getSilentPaymentAddress());
+
+            return new SilentPayment(
+                    silentPaymentAddress,
+                    selectedContact.getName(),
+                    value,
+                    false
+            );
+        } catch (IllegalArgumentException | UnsupportedOperationException e) {
+            throw new IllegalStateException("Invalid donation specified", e);
+        }
+    }
+
+    public boolean isValidDonation() {
+        try {
+            getDonationPayment();
+            return true;
+        } catch (IllegalStateException e) {
+            return false;
+        }
+    }
+
+    // Per veure que realment s'estigui creant l'objecte SilentPayment i tot estigui anant bé
+    private void debugDonation() {
+        try {
+            SilentPayment payment = getDonationPayment();
+
+            System.out.println("=== DONATION DEBUG ===");
+            System.out.println("Contact: " + getSelectedContact().getName());
+            System.out.println("SP address: " + payment.getSilentPaymentAddress().getAddress());
+            System.out.println("Amount sats: " + payment.getAmount());
+            System.out.println("Label: " + payment.getLabel());
+            System.out.println("Valid: true");
+            System.out.println("======================");
+        } catch (IllegalStateException e) {
+            System.out.println("DONATION DEBUG -> encara no és una donació vàlida");
+        }
+    }
+
+    private long getDonationDustThreshold() {
+        var address = SilentPayment.getDummyAddress();
+
+        TransactionOutput txOutput
+                = new TransactionOutput(
+                        new Transaction(),
+                        1L,
+                        address.getOutputScript()
+                );
+
+        return address.getScriptType().getDustThreshold(
+                txOutput,
+                Transaction.DUST_RELAY_TX_FEE
+        );
     }
 }
