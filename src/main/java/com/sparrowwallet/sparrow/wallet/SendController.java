@@ -13,6 +13,7 @@ import com.sparrowwallet.drongo.policy.PolicyType;
 import com.sparrowwallet.drongo.protocol.*;
 import com.sparrowwallet.drongo.psbt.PSBT;
 import com.sparrowwallet.drongo.silentpayments.SilentPayment;
+
 import com.sparrowwallet.drongo.uri.BitcoinURI;
 import com.sparrowwallet.drongo.wallet.*;
 import com.sparrowwallet.sparrow.*;
@@ -65,11 +66,15 @@ import java.util.stream.Collectors;
 import static com.sparrowwallet.sparrow.AppServices.*;
 
 public class SendController extends WalletFormController implements Initializable {
+
     private static final Logger log = LoggerFactory.getLogger(SendController.class);
     private static final SecureRandom SECURE_RANDOM = new SecureRandom();
 
     @FXML
     private TabPane paymentTabs;
+
+    @FXML
+    private TabPane donationTabs;
 
     @FXML
     private ToggleGroup feeSelectionToggleGroup;
@@ -152,6 +157,20 @@ public class SendController extends WalletFormController implements Initializabl
     @FXML
     private Button notificationButton;
 
+    @FXML
+    private CheckBox addDonationCheckBox;
+
+    @FXML
+    private ComboBox<DonationMode> donationMode;
+
+    @FXML
+    private void addDonation(ActionEvent event) {
+        addDonationTab();
+    }
+
+    @FXML
+    private Button addDonationButton;
+
     private StackPane tabHeader;
 
     private final BooleanProperty userFeeSet = new SimpleBooleanProperty(false);
@@ -182,7 +201,7 @@ public class SendController extends WalletFormController implements Initializabl
         @Override
         public void changed(ObservableValue<? extends String> observable, String oldValue, String newValue) {
             userFeeSet.set(true);
-            if(newValue.isEmpty()) {
+            if (newValue.isEmpty()) {
                 fiatFeeAmount.setText("");
             } else {
                 setFiatFeeAmount(AppServices.getFiatCurrencyExchangeRate(), getFeeValueSats());
@@ -199,7 +218,7 @@ public class SendController extends WalletFormController implements Initializabl
             Map<Integer, Double> targetBlocksFeeRates = getTargetBlocksFeeRates();
             Integer target = getTargetBlocks();
 
-            if(targetBlocksFeeRates != null) {
+            if (targetBlocksFeeRates != null) {
                 setFeeRate(targetBlocksFeeRates.get(target));
                 blockTargetFeeRatesChart.select(target);
             } else {
@@ -210,8 +229,8 @@ public class SendController extends WalletFormController implements Initializabl
             targetBlocks.setTooltip(tooltip);
 
             userFeeSet.set(false);
-            for(Tab tab : paymentTabs.getTabs()) {
-                PaymentController controller = (PaymentController)tab.getUserData();
+            for (Tab tab : paymentTabs.getTabs()) {
+                PaymentController controller = (PaymentController) tab.getUserData();
                 controller.revalidateAmount();
             }
             updateTransaction();
@@ -223,8 +242,8 @@ public class SendController extends WalletFormController implements Initializabl
         public void changed(ObservableValue<? extends Number> observable, Number oldValue, Number newValue) {
             setFeeRate(getFeeRangeRate());
             userFeeSet.set(false);
-            for(Tab tab : paymentTabs.getTabs()) {
-                PaymentController controller = (PaymentController)tab.getUserData();
+            for (Tab tab : paymentTabs.getTabs()) {
+                PaymentController controller = (PaymentController) tab.getUserData();
                 controller.revalidateAmount();
             }
             updateTransaction();
@@ -248,6 +267,31 @@ public class SendController extends WalletFormController implements Initializabl
         EventManager.get().register(this);
     }
 
+    private void updateDonationControls() {
+        boolean enabled
+                = !addDonationCheckBox.isDisabled()
+                && addDonationCheckBox.isSelected();
+
+        donationMode.setDisable(!enabled);
+
+        boolean manual
+                = enabled && donationMode.getValue() == DonationMode.MANUAL;
+
+        addDonationButton.setVisible(manual);
+        addDonationButton.setManaged(manual);
+
+        donationTabs.setVisible(manual);
+        donationTabs.setManaged(manual);
+
+        if (manual) {
+            if (donationTabs.getTabs().isEmpty()) {
+                addDonationTab();
+            }
+        } else {
+            donationTabs.getTabs().clear();
+        }
+    }
+
     @Override
     public void initializeView() {
         addValidation();
@@ -255,13 +299,29 @@ public class SendController extends WalletFormController implements Initializabl
         addPaymentTab();
         initializeTabHeader(0);
 
+        addDonationCheckBox.setDisable(true);
+
+        addDonationCheckBox.selectedProperty().addListener(
+                (observable, oldValue, newValue) -> updateDonationControls()
+        );
+
+        donationMode.valueProperty().addListener(
+                (observable, oldValue, newValue) -> updateDonationControls()
+        );
+        donationTabs.getTabs().addListener((ListChangeListener<Tab>) change -> {
+            updateDonationTabs();
+        });
+
+        donationMode.getSelectionModel().select(DonationMode.AUTO);
+        updateDonationControls();
+
         paymentTabs.getTabs().addListener((ListChangeListener<Tab>) c -> {
-            if(tabHeader != null) {
+            if (tabHeader != null) {
                 tabHeader.setVisible(c.getList().size() > 1);
             }
 
-            if(c.getList().size() > 1) {
-                if(!paymentTabs.getStyleClass().contains("multiple-tabs")) {
+            if (c.getList().size() > 1) {
+                if (!paymentTabs.getStyleClass().contains("multiple-tabs")) {
                     paymentTabs.getStyleClass().add("multiple-tabs");
                 }
                 paymentTabs.getTabs().forEach(tab -> {
@@ -278,8 +338,8 @@ public class SendController extends WalletFormController implements Initializabl
         });
 
         insufficientInputsProperty.addListener((observable, oldValue, newValue) -> {
-            for(Tab tab : paymentTabs.getTabs()) {
-                PaymentController controller = (PaymentController)tab.getUserData();
+            for (Tab tab : paymentTabs.getTabs()) {
+                PaymentController controller = (PaymentController) tab.getUserData();
                 controller.revalidateAmount();
             }
             revalidate(fee, feeListener);
@@ -299,7 +359,7 @@ public class SendController extends WalletFormController implements Initializabl
 
             @Override
             public Double fromString(String string) {
-                return (double)TARGET_BLOCKS_RANGE.indexOf(Integer.valueOf(string.replace("+", "")));
+                return (double) TARGET_BLOCKS_RANGE.indexOf(Integer.valueOf(string.replace("+", "")));
             }
         });
         targetBlocks.valueProperty().addListener(targetBlocksListener);
@@ -312,7 +372,7 @@ public class SendController extends WalletFormController implements Initializabl
         blockTargetFeeRatesChart.visibleProperty().bind(Bindings.equal(feeRatesSelectionProperty, FeeRatesSelection.BLOCK_TARGET));
         blockTargetFeeRatesChart.initialize();
         Map<Integer, Double> targetBlocksFeeRates = getTargetBlocksFeeRates();
-        if(targetBlocksFeeRates != null) {
+        if (targetBlocksFeeRates != null) {
             blockTargetFeeRatesChart.update(targetBlocksFeeRates);
         } else {
             feeRate.setText("Unknown");
@@ -322,14 +382,14 @@ public class SendController extends WalletFormController implements Initializabl
         mempoolSizeFeeRatesChart.visibleProperty().bind(Bindings.equal(feeRatesSelectionProperty, FeeRatesSelection.MEMPOOL_SIZE));
         mempoolSizeFeeRatesChart.initialize();
         Map<Date, Set<MempoolRateSize>> mempoolHistogram = getMempoolHistogram();
-        if(mempoolHistogram != null) {
+        if (mempoolHistogram != null) {
             mempoolSizeFeeRatesChart.update(mempoolHistogram);
         }
 
         recentBlocksView.managedProperty().bind(recentBlocksView.visibleProperty());
         recentBlocksView.visibleProperty().bind(Bindings.equal(feeRatesSelectionProperty, FeeRatesSelection.RECENT_BLOCKS));
         List<BlockSummary> blockSummaries = AppServices.getBlockSummaries().values().stream().sorted().toList();
-        if(!blockSummaries.isEmpty()) {
+        if (!blockSummaries.isEmpty()) {
             recentBlocksView.update(blockSummaries, AppServices.getNextBlockMedianFeeRate());
         }
 
@@ -337,10 +397,10 @@ public class SendController extends WalletFormController implements Initializabl
             boolean isBlockTargetSelection = (newValue == FeeRatesSelection.BLOCK_TARGET);
             boolean wasBlockTargetSelection = (oldValue == FeeRatesSelection.BLOCK_TARGET || oldValue == null);
             targetBlocksField.setVisible(isBlockTargetSelection);
-            if(isBlockTargetSelection) {
+            if (isBlockTargetSelection) {
                 setTargetBlocks(getTargetBlocks(getFeeRangeRate()));
                 updateTransaction();
-            } else if(wasBlockTargetSelection) {
+            } else if (wasBlockTargetSelection) {
                 setFeeRangeRate(getTargetBlocksFeeRates().get(getTargetBlocks()));
                 updateTransaction();
             }
@@ -352,11 +412,11 @@ public class SendController extends WalletFormController implements Initializabl
         cpfpFeeRate.setVisible(false);
         setDefaultFeeRate();
         feeRatesSelectionProperty.set(feeRatesSelection);
-        feeSelectionToggleGroup.selectToggle(feeRatesSelection == FeeRatesSelection.BLOCK_TARGET ? targetBlocksToggle :
-                (feeRatesSelection == FeeRatesSelection.MEMPOOL_SIZE ? mempoolSizeToggle : recentBlocksToggle));
+        feeSelectionToggleGroup.selectToggle(feeRatesSelection == FeeRatesSelection.BLOCK_TARGET ? targetBlocksToggle
+                : (feeRatesSelection == FeeRatesSelection.MEMPOOL_SIZE ? mempoolSizeToggle : recentBlocksToggle));
         feeSelectionToggleGroup.selectedToggleProperty().addListener((observable, oldValue, newValue) -> {
-            if(newValue != null) {
-                FeeRatesSelection newFeeRatesSelection = (FeeRatesSelection)newValue.getUserData();
+            if (newValue != null) {
+                FeeRatesSelection newFeeRatesSelection = (FeeRatesSelection) newValue.getUserData();
                 Config.get().setFeeRatesSelection(newFeeRatesSelection);
                 EventManager.get().post(new FeeRatesSelectionChangedEvent(getWalletForm().getWallet(), newFeeRatesSelection));
             };
@@ -370,7 +430,7 @@ public class SendController extends WalletFormController implements Initializabl
         feeAmountUnit.valueProperty().addListener((observable, oldValue, newValue) -> {
             Long value = getFeeValueSats(oldValue);
             fee.setTextFormatter(new CoinTextFormatter(Config.get().getUnitFormat(), newValue));
-            if(value != null) {
+            if (value != null) {
                 setFeeValueSats(value);
             }
         });
@@ -379,8 +439,8 @@ public class SendController extends WalletFormController implements Initializabl
             blockTargetFeeRatesChart.select(0);
 
             Node thumb = getSliderThumb();
-            if(thumb != null) {
-                if(newValue) {
+            if (thumb != null) {
+                if (newValue) {
                     thumb.getStyleClass().add("inactive");
                 } else {
                     thumb.getStyleClass().remove("inactive");
@@ -402,11 +462,11 @@ public class SendController extends WalletFormController implements Initializabl
 
         walletTransactionProperty.addListener((observable, oldValue, walletTransaction) -> {
             setEffectiveFeeRate(walletTransaction);
-            if(walletTransaction != null) {
+            if (walletTransaction != null) {
                 setPayments(walletTransaction.getPayments().stream().filter(payment -> payment.getType() != Payment.Type.FAKE_MIX).collect(Collectors.toList()));
 
                 double feeRate = walletTransaction.getFeeRate();
-                if(userFeeSet.get()) {
+                if (userFeeSet.get()) {
                     setTargetBlocks(getTargetBlocks(feeRate));
                     setFeeRangeRate(feeRate);
                     revalidate(fee, feeListener);
@@ -422,10 +482,20 @@ public class SendController extends WalletFormController implements Initializabl
             updatePrivacyAnalysis(walletTransaction);
             createButton.setDisable(walletTransaction == null || isInsufficientFeeRate());
             notificationButton.setDisable(walletTransaction == null || isInsufficientFeeRate() || !AppServices.isConnected());
+
+            //Només quan hi ha una transacció vàlida està enabled i selected, s'ha de treure el selected
+            boolean transactionValid = walletTransaction != null;
+
+            if (!transactionValid) {
+                addDonationCheckBox.setSelected(false);
+                donationMode.getSelectionModel().select(DonationMode.AUTO);
+            }
+            addDonationCheckBox.setDisable(walletTransaction == null);
+            updateDonationControls();
         });
 
         transactionDiagram.sceneProperty().addListener((observable, oldScene, newScene) -> {
-            if(oldScene == null && newScene != null) {
+            if (oldScene == null && newScene != null) {
                 transactionDiagram.update(walletTransactionProperty.get());
                 newScene.getWindow().heightProperty().addListener((observable1, oldValue, newValue) -> {
                     transactionDiagram.update(walletTransactionProperty.get());
@@ -434,7 +504,7 @@ public class SendController extends WalletFormController implements Initializabl
         });
 
         efficiencyToggle.setOnAction(event -> {
-            if(StandardAccount.isWhirlpoolMixAccount(getWalletForm().getWallet().getStandardAccountType()) && !overrideOptimizationStrategy) {
+            if (StandardAccount.isWhirlpoolMixAccount(getWalletForm().getWallet().getStandardAccountType()) && !overrideOptimizationStrategy) {
                 AppServices.showWarningDialog("Privacy may be lost!", "It is recommended to optimize for privacy when sending coinjoined outputs.");
                 overrideOptimizationStrategy = true;
             }
@@ -461,21 +531,21 @@ public class SendController extends WalletFormController implements Initializabl
     private void initializeTabHeader(int count) {
         final int lookupCount = count;
         Platform.runLater(() -> {
-            StackPane stackPane = (StackPane)paymentTabs.lookup(".tab-header-area");
-            if(stackPane != null) {
+            StackPane stackPane = (StackPane) paymentTabs.lookup(".tab-header-area");
+            if (stackPane != null) {
                 tabHeader = stackPane;
                 tabHeader.managedProperty().bind(tabHeader.visibleProperty());
                 tabHeader.setVisible(paymentTabs.getTabs().size() > 1);
                 paymentTabs.getStyleClass().remove("initial");
-            } else if(lookupCount < 20) {
-                initializeTabHeader(lookupCount+1);
+            } else if (lookupCount < 20) {
+                initializeTabHeader(lookupCount + 1);
             }
         });
     }
 
     public BitcoinUnit getBitcoinUnit(BitcoinUnit bitcoinUnit) {
         BitcoinUnit unit = bitcoinUnit;
-        if(unit == null || unit.equals(BitcoinUnit.AUTO)) {
+        if (unit == null || unit.equals(BitcoinUnit.AUTO)) {
             unit = getWalletForm().getWallet().getAutoUnit();
         }
         return unit;
@@ -489,15 +559,15 @@ public class SendController extends WalletFormController implements Initializabl
         validationSupport = new ValidationSupport();
         validationSupport.setValidationDecorator(new StyleClassValidationDecoration());
         validationSupport.registerValidator(fee, Validator.combine(
-                (Control c, String newValue) -> ValidationResult.fromErrorIf( c, "Insufficient Inputs", userFeeSet.get() && insufficientInputsProperty.get()),
-                (Control c, String newValue) -> ValidationResult.fromErrorIf( c, "Insufficient Fee Rate", isInsufficientFeeRate())
+                (Control c, String newValue) -> ValidationResult.fromErrorIf(c, "Insufficient Inputs", userFeeSet.get() && insufficientInputsProperty.get()),
+                (Control c, String newValue) -> ValidationResult.fromErrorIf(c, "Insufficient Fee Rate", isInsufficientFeeRate())
         ));
 
         validationSupport.setErrorDecorationEnabled(false);
     }
 
     public void addPaymentTab() {
-        if(Config.get().getSuggestSendToMany() == null && openSendToMany()) {
+        if (Config.get().getSuggestSendToMany() == null && openSendToMany()) {
             return;
         }
 
@@ -506,21 +576,39 @@ public class SendController extends WalletFormController implements Initializabl
         paymentTabs.getSelectionModel().select(tab);
     }
 
+    public void addDonationTab() {
+        Tab tab = getDonationTab();
+
+        donationTabs.getTabs().add(tab);
+        donationTabs.getSelectionModel().select(tab);
+    }
+
+    private void updateDonationTabs() {
+        int tabCount = donationTabs.getTabs().size();
+
+        for (int i = 0; i < tabCount; i++) {
+            Tab tab = donationTabs.getTabs().get(i);
+
+            tab.setText("Donation " + (i + 1));
+            tab.setClosable(tabCount > 1);
+        }
+    }
+
     private boolean openSendToMany() {
         try {
             List<Payment> payments = getPayments();
-            if(payments.size() == 3) {
+            if (payments.size() == 3) {
                 ConfirmationAlert confirmationAlert = new ConfirmationAlert("Open Send To Many?", "Open the Tools > Send To Many dialog to add multiple payments?", ButtonType.NO, ButtonType.YES);
                 Optional<ButtonType> optType = confirmationAlert.showAndWait();
-                if(confirmationAlert.isDontAskAgain() && optType.isPresent()) {
+                if (confirmationAlert.isDontAskAgain() && optType.isPresent()) {
                     Config.get().setSuggestSendToMany(optType.get() == ButtonType.YES);
                 }
-                if(optType.isPresent() && optType.get() == ButtonType.YES) {
+                if (optType.isPresent() && optType.get() == ButtonType.YES) {
                     Platform.runLater(() -> EventManager.get().post(new RequestSendToManyEvent(payments)));
                     return true;
                 }
             }
-        } catch(Exception e) {
+        } catch (Exception e) {
             //ignore
         }
 
@@ -544,10 +632,31 @@ public class SendController extends WalletFormController implements Initializabl
         }
     }
 
+    public Tab getDonationTab() {
+
+        int donationNumber = donationTabs.getTabs().size() + 1;
+
+        Tab tab = new Tab("Donation " + donationNumber);
+
+        try {
+            FXMLLoader donationLoader
+                    = new FXMLLoader(AppServices.class.getResource("wallet/donation.fxml"));
+
+            tab.setContent(donationLoader.load());
+
+            DonationController controller = donationLoader.getController();
+            tab.setUserData(controller);
+
+            return tab;
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
     public List<Payment> getPayments() {
         List<Payment> payments = new ArrayList<>();
-        for(Tab tab : paymentTabs.getTabs()) {
-            PaymentController controller = (PaymentController)tab.getUserData();
+        for (Tab tab : paymentTabs.getTabs()) {
+            PaymentController controller = (PaymentController) tab.getUserData();
             payments.add(controller.getPayment());
         }
 
@@ -555,28 +664,28 @@ public class SendController extends WalletFormController implements Initializabl
     }
 
     public void setPayments(List<Payment> payments) {
-        while(paymentTabs.getTabs().size() < payments.size()) {
+        while (paymentTabs.getTabs().size() < payments.size()) {
             addPaymentTab();
         }
 
-        while(paymentTabs.getTabs().size() > payments.size()) {
+        while (paymentTabs.getTabs().size() > payments.size()) {
             paymentTabs.getTabs().remove(paymentTabs.getTabs().size() - 1);
         }
 
-        for(int i = 0; i < paymentTabs.getTabs().size(); i++) {
+        for (int i = 0; i < paymentTabs.getTabs().size(); i++) {
             Payment payment = payments.get(i);
-            PaymentController controller = (PaymentController)paymentTabs.getTabs().get(i).getUserData();
+            PaymentController controller = (PaymentController) paymentTabs.getTabs().get(i).getUserData();
             controller.setPayment(payment);
         }
     }
 
     int getPayNymSendIndex(PaymentController paymentController) {
         int index = 0;
-        for(Tab tab : paymentTabs.getTabs()) {
-            PaymentController controller = (PaymentController)tab.getUserData();
-            if(controller == paymentController) {
+        for (Tab tab : paymentTabs.getTabs()) {
+            PaymentController controller = (PaymentController) tab.getUserData();
+            if (controller == paymentController) {
                 break;
-            } else if(controller.isSentToSamePayNym(paymentController)) {
+            } else if (controller.isSentToSamePayNym(paymentController)) {
                 index++;
             }
         }
@@ -590,28 +699,31 @@ public class SendController extends WalletFormController implements Initializabl
 
     public void updateTransaction(boolean sendAll) {
         try {
-            if(paymentTabs.getTabs().size() == 1) {
-                PaymentController controller = (PaymentController)paymentTabs.getTabs().get(0).getUserData();
+            if (paymentTabs.getTabs().size() == 1) {
+                PaymentController controller = (PaymentController) paymentTabs.getTabs().get(0).getUserData();
                 controller.setSendMax(sendAll);
                 updateTransaction(List.of(controller.getPayment()));
             } else {
                 updateTransaction(null);
             }
-        } catch(IllegalStateException e) {
+        } catch (IllegalStateException e) {
             //ignore
         }
     }
 
     public void updateTransaction(List<Payment> transactionPayments) {
-        if(walletTransactionService != null && walletTransactionService.isRunning()) {
+        // Per si ja hi havia alguna altra transacció en creació i s'ha actualitzat algun paràmetre no pugui després tornar a sobreescriure lo nou
+        if (walletTransactionService != null && walletTransactionService.isRunning()) {
             walletTransactionService.setIgnoreResult(true);
             walletTransactionService.cancel();
         }
 
         try {
+            // Si no t'han passat explícitament uns payments llegeix els que hi hagi actualment
+            // DESTINATARIS ALS QUE VOLEM PAGAR
             List<Payment> payments = transactionPayments != null ? transactionPayments : getPayments();
             updateOptimizationButtons(payments);
-            if(!userFeeSet.get() || getFeeValueSats() != null) {
+            if (!userFeeSet.get() || getFeeValueSats() != null) {
                 Wallet wallet = getWalletForm().getWallet();
                 Long userFee = userFeeSet.get() ? getFeeValueSats() : null;
                 double feeRate = getUserFeeRate();
@@ -631,16 +743,16 @@ public class SendController extends WalletFormController implements Initializabl
                         currentBlockHeight, groupByAddress, includeMempoolOutputs, allowRbf);
                 walletTransactionService = new WalletTransactionService(wallet, params, replacedTransaction);
                 walletTransactionService.setOnSucceeded(event -> {
-                    if(!walletTransactionService.isIgnoreResult()) {
+                    if (!walletTransactionService.isIgnoreResult()) {
                         walletTransactionProperty.setValue(walletTransactionService.getValue());
                         insufficientInputsProperty.set(false);
                     }
                 });
                 walletTransactionService.setOnFailed(event -> {
-                    if(!walletTransactionService.isIgnoreResult()) {
+                    if (!walletTransactionService.isIgnoreResult()) {
                         transactionDiagram.clear();
                         walletTransactionProperty.setValue(null);
-                        if(event.getSource().getException() instanceof InsufficientFundsException) {
+                        if (event.getSource().getException() instanceof InsufficientFundsException) {
                             insufficientInputsProperty.set(true);
                         }
                     }
@@ -648,10 +760,10 @@ public class SendController extends WalletFormController implements Initializabl
 
                 final WalletTransactionService currentWalletTransactionService = walletTransactionService;
                 final KeyFrame delay = new KeyFrame(Duration.millis(200), e -> {
-                    if(currentWalletTransactionService.isRunning()) {
+                    if (currentWalletTransactionService.isRunning()) {
                         transactionDiagram.update(currentWalletTransactionService.getMessage());
                         currentWalletTransactionService.messageProperty().addListener((observable1, oldValue, newValue) -> {
-                            if(currentWalletTransactionService.isRunning()) {
+                            if (currentWalletTransactionService.isRunning()) {
                                 transactionDiagram.update(newValue);
                             }
                         });
@@ -664,13 +776,13 @@ public class SendController extends WalletFormController implements Initializabl
 
                 walletTransactionService.start();
             }
-        } catch(IllegalStateException e) {
+        } catch (IllegalStateException e) {
             walletTransactionProperty.setValue(null);
         }
     }
 
     private List<UtxoSelector> getUtxoSelectors(List<Payment> payments) {
-        if(utxoSelectorProperty.get() != null) {
+        if (utxoSelectorProperty.get() != null) {
             return List.of(utxoSelectorProperty.get());
         }
 
@@ -679,8 +791,8 @@ public class SendController extends WalletFormController implements Initializabl
         long costOfChange = wallet.getCostOfChange(getUserFeeRate(), getMinimumFeeRate());
 
         List<UtxoSelector> selectors = new ArrayList<>();
-        OptimizationStrategy optimizationStrategy = (OptimizationStrategy)optimizationToggleGroup.getSelectedToggle().getUserData();
-        if(optimizationStrategy == OptimizationStrategy.PRIVACY
+        OptimizationStrategy optimizationStrategy = (OptimizationStrategy) optimizationToggleGroup.getSelectedToggle().getUserData();
+        if (optimizationStrategy == OptimizationStrategy.PRIVACY
                 && payments.size() == 1
                 && (payments.get(0).getAddress().getScriptType() == getWalletForm().getWallet().getNode(KeyPurpose.RECEIVE).getAddress().getScriptType())) {
             selectors.add(new StonewallUtxoSelector(payments.get(0).getAddress().getScriptType(), noInputsFee));
@@ -691,6 +803,7 @@ public class SendController extends WalletFormController implements Initializabl
     }
 
     private static class WalletTransactionService extends Service<WalletTransaction> {
+
         private final Wallet wallet;
         private final TransactionParameters params;
         private final BlockTransaction replacedTransaction;
@@ -708,8 +821,8 @@ public class SendController extends WalletFormController implements Initializabl
                 protected WalletTransaction call() throws InsufficientFundsException {
                     try {
                         return getWalletTransaction();
-                    } catch(InsufficientFundsException e) {
-                        if(e.getTargetValue() != null && replacedTransaction != null && wallet.isSafeToAddInputsOrOutputs(replacedTransaction)
+                    } catch (InsufficientFundsException e) {
+                        if (e.getTargetValue() != null && replacedTransaction != null && wallet.isSafeToAddInputsOrOutputs(replacedTransaction)
                                 && params.utxoSelectors().size() == 1 && params.utxoSelectors().getFirst() instanceof PresetUtxoSelector presetUtxoSelector) {
                             //Creating RBF transaction - include additional UTXOs if available to pay desired fee
                             List<TxoFilter> filters = new ArrayList<>(params.txoFilters());
@@ -718,9 +831,9 @@ public class SendController extends WalletFormController implements Initializabl
                                     .stream().filter(outputGroup -> outputGroup.getEffectiveValue() >= 0).collect(Collectors.toList());
                             Collections.shuffle(outputGroups, SECURE_RANDOM);
 
-                            while(!outputGroups.isEmpty() && presetUtxoSelector.getPresetUtxos().stream().mapToLong(BlockTransactionHashIndex::getValue).sum() < e.getTargetValue()) {
+                            while (!outputGroups.isEmpty() && presetUtxoSelector.getPresetUtxos().stream().mapToLong(BlockTransactionHashIndex::getValue).sum() < e.getTargetValue()) {
                                 OutputGroup outputGroup = outputGroups.removeFirst();
-                                for(BlockTransactionHashIndex utxo : outputGroup.getUtxos()) {
+                                for (BlockTransactionHashIndex utxo : outputGroup.getUtxos()) {
                                     presetUtxoSelector.getPresetUtxos().add(utxo);
                                 }
                             }
@@ -756,7 +869,7 @@ public class SendController extends WalletFormController implements Initializabl
         SpentTxoFilter spentTxoFilter = new SpentTxoFilter(replacedTransactionProperty.get() == null ? null : replacedTransactionProperty.get().getHash());
 
         TxoFilter txoFilter = txoFilterProperty.get();
-        if(txoFilter != null) {
+        if (txoFilter != null) {
             return List.of(txoFilter, spentTxoFilter, new FrozenTxoFilter(), new CoinbaseTxoFilter(getWalletForm().getWallet()));
         }
 
@@ -772,7 +885,7 @@ public class SendController extends WalletFormController implements Initializabl
         recentBlocksView.updateFeeRate(defaultRate);
         setFeeRangeRate(defaultRate);
         setFeeRate(getFeeRangeRate());
-        if(Network.get().equals(Network.MAINNET) && defaultRate == getFallbackFeeRate()) {
+        if (Network.get().equals(Network.MAINNET) && defaultRate == getFallbackFeeRate()) {
             //Update the selected fee rate once fee rates have been received
             updateDefaultFeeRate = true;
         }
@@ -787,7 +900,7 @@ public class SendController extends WalletFormController implements Initializabl
     }
 
     private Long getFeeValueSats(UnitFormat unitFormat, BitcoinUnit bitcoinUnit) {
-        if(fee.getText() != null && !fee.getText().isEmpty()) {
+        if (fee.getText() != null && !fee.getText().isEmpty()) {
             UnitFormat format = unitFormat == null ? UnitFormat.DOT : unitFormat;
             double fieldValue = Double.parseDouble(fee.getText().replaceAll(Pattern.quote(format.getGroupingSeparator()), "").replaceAll(",", "."));
             return bitcoinUnit.getSatsValue(fieldValue);
@@ -807,18 +920,18 @@ public class SendController extends WalletFormController implements Initializabl
     }
 
     private Integer getTargetBlocks() {
-        int index = (int)targetBlocks.getValue();
+        int index = (int) targetBlocks.getValue();
         return TARGET_BLOCKS_RANGE.get(index);
     }
 
     private Integer getTargetBlocks(double feeRate) {
         Map<Integer, Double> targetBlocksFeeRates = getTargetBlocksFeeRates();
         int maxTargetBlocks = 1;
-        for(Integer targetBlocks : targetBlocksFeeRates.keySet()) {
-            if(TARGET_BLOCKS_RANGE.contains(targetBlocks)) {
+        for (Integer targetBlocks : targetBlocksFeeRates.keySet()) {
+            if (TARGET_BLOCKS_RANGE.contains(targetBlocks)) {
                 maxTargetBlocks = Math.max(maxTargetBlocks, targetBlocks);
                 Double candidate = targetBlocksFeeRates.get(targetBlocks);
-                if(Math.round(feeRate) >= Math.round(candidate)) {
+                if (Math.round(feeRate) >= Math.round(candidate)) {
                     return targetBlocks;
                 }
             }
@@ -839,9 +952,11 @@ public class SendController extends WalletFormController implements Initializabl
 
     private Map<Integer, Double> getTargetBlocksFeeRates() {
         Map<Integer, Double> retrievedFeeRates = AppServices.getTargetBlockFeeRates();
-        if(retrievedFeeRates == null) {
+        if (retrievedFeeRates == null) {
             retrievedFeeRates = TARGET_BLOCKS_RANGE.stream().collect(Collectors.toMap(java.util.function.Function.identity(), v -> getFallbackFeeRate(),
-                    (u, v) -> { throw new IllegalStateException("Duplicate target blocks"); },
+                    (u, v) -> {
+                        throw new IllegalStateException("Duplicate target blocks");
+                    },
                     LinkedHashMap::new));
         }
 
@@ -859,9 +974,11 @@ public class SendController extends WalletFormController implements Initializabl
     }
 
     /**
-     * This method retrieves the fee rate used as input to constructing the transaction.
-     * Where the user has set a custom fee amount, using the slider fee rate can mean the UTXO selectors underestimate the UTXO effective values and fail to find a solution
-     * In this case, use a fee rate of 1 sat/VB for maximum flexibility
+     * This method retrieves the fee rate used as input to constructing the
+     * transaction. Where the user has set a custom fee amount, using the slider
+     * fee rate can mean the UTXO selectors underestimate the UTXO effective
+     * values and fail to find a solution In this case, use a fee rate of 1
+     * sat/VB for maximum flexibility
      *
      * @return the fee rate to use when constructing a transaction
      */
@@ -870,7 +987,7 @@ public class SendController extends WalletFormController implements Initializabl
     }
 
     public Double getFeeRate() {
-        if(targetBlocksField.isVisible()) {
+        if (targetBlocksField.isVisible()) {
             return getTargetBlocksFeeRates().get(getTargetBlocks());
         } else {
             return getFeeRangeRate();
@@ -881,7 +998,7 @@ public class SendController extends WalletFormController implements Initializabl
         Optional<Double> optMinFeeRate = getTargetBlocksFeeRates().values().stream().min(Double::compareTo);
         double minRate = optMinFeeRate.orElse(getFallbackFeeRate());
         Double userFeeRate = getFeeRate();
-        if(userFeeRate != null) {
+        if (userFeeRate != null) {
             minRate = Math.min(userFeeRate, minRate);
         }
         return Math.max(minRate, Transaction.DUST_RELAY_TX_FEE);
@@ -902,18 +1019,18 @@ public class SendController extends WalletFormController implements Initializabl
     }
 
     private void setEffectiveFeeRate(WalletTransaction walletTransaction) {
-        List<BlockTransaction> unconfirmedUtxoTxs = walletTransaction == null ? Collections.emptyList() :
-                walletTransaction.getSelectedUtxos().keySet().stream().filter(ref -> ref.getHeight() <= 0)
+        List<BlockTransaction> unconfirmedUtxoTxs = walletTransaction == null ? Collections.emptyList()
+                : walletTransaction.getSelectedUtxos().keySet().stream().filter(ref -> ref.getHeight() <= 0)
                         .map(ref -> getWalletForm().getWallet().getWalletTransaction(ref.getHash()))
                         .filter(Objects::nonNull).distinct().collect(Collectors.toList());
-        if(!unconfirmedUtxoTxs.isEmpty() && unconfirmedUtxoTxs.stream().allMatch(blkTx -> blkTx.getFee() != null && blkTx.getFee() > 0)) {
+        if (!unconfirmedUtxoTxs.isEmpty() && unconfirmedUtxoTxs.stream().allMatch(blkTx -> blkTx.getFee() != null && blkTx.getFee() > 0)) {
             long utxoTxFee = unconfirmedUtxoTxs.stream().mapToLong(BlockTransaction::getFee).sum();
             double utxoTxSize = unconfirmedUtxoTxs.stream().mapToDouble(blkTx -> blkTx.getTransaction().getVirtualSize()).sum();
             long thisFee = walletTransaction.getFee();
             double thisSize = walletTransaction.getVirtualSize();
             double thisRate = thisFee / thisSize;
             double effectiveRate = (utxoTxFee + thisFee) / (utxoTxSize + thisSize);
-            if(thisRate > effectiveRate) {
+            if (thisRate > effectiveRate) {
                 UnitFormat format = Config.get().getUnitFormat() == null ? UnitFormat.DOT : Config.get().getUnitFormat();
                 String strEffectiveRate = format.getCurrencyFormat().format(effectiveRate);
                 Tooltip tooltip = new Tooltip("CPFP (Child Pays For Parent)\n" + strEffectiveRate + " sats/vB effective rate");
@@ -930,9 +1047,9 @@ public class SendController extends WalletFormController implements Initializabl
 
     private void setFeeRatePriority(Double feeRateAmt) {
         Map<Integer, Double> targetBlocksFeeRates = getTargetBlocksFeeRates();
-        if(targetBlocksFeeRates.get(Integer.MAX_VALUE) != null) {
+        if (targetBlocksFeeRates.get(Integer.MAX_VALUE) != null) {
             Double minFeeRate = targetBlocksFeeRates.get(Integer.MAX_VALUE);
-            if(minFeeRate > 1.0 && feeRateAmt < minFeeRate) {
+            if (minFeeRate > 1.0 && feeRateAmt < minFeeRate) {
                 feeRatePriority.setText("Below Minimum");
                 feeRatePriority.setTooltip(new Tooltip("Transactions at this fee rate are currently being purged from the default sized mempool"));
                 feeRatePriorityGlyph.setStyle("-fx-text-fill: #a0a1a7cc");
@@ -941,7 +1058,7 @@ public class SendController extends WalletFormController implements Initializabl
             }
 
             Double lowestBlocksRate = targetBlocksFeeRates.get(TARGET_BLOCKS_RANGE.get(TARGET_BLOCKS_RANGE.size() - 1));
-            if(lowestBlocksRate >= minFeeRate && feeRateAmt < (minFeeRate + ((lowestBlocksRate - minFeeRate) / 2)) && !isPayjoinTx()) {
+            if (lowestBlocksRate >= minFeeRate && feeRateAmt < (minFeeRate + ((lowestBlocksRate - minFeeRate) / 2)) && !isPayjoinTx()) {
                 feeRatePriority.setText("Try Then Replace");
                 feeRatePriority.setTooltip(new Tooltip("Send a transaction, verify it appears in the destination wallet, then RBF to get it confirmed or sent to another address"));
                 feeRatePriorityGlyph.setStyle("-fx-text-fill: #7eb7c9cc");
@@ -951,11 +1068,11 @@ public class SendController extends WalletFormController implements Initializabl
         }
 
         Integer targetBlocks = getTargetBlocks(feeRateAmt);
-        if(targetBlocks != null) {
-            if(targetBlocks < FeeRatesSource.BLOCKS_IN_HALF_HOUR) {
+        if (targetBlocks != null) {
+            if (targetBlocks < FeeRatesSource.BLOCKS_IN_HALF_HOUR) {
                 Double maxFeeRate = AppServices.getFeeRatesRange().getLast();
                 Double highestBlocksRate = targetBlocksFeeRates.get(TARGET_BLOCKS_RANGE.get(0));
-                if(highestBlocksRate < maxFeeRate && feeRateAmt > (highestBlocksRate + ((maxFeeRate - highestBlocksRate) / 10))) {
+                if (highestBlocksRate < maxFeeRate && feeRateAmt > (highestBlocksRate + ((maxFeeRate - highestBlocksRate) / 10))) {
                     feeRatePriority.setText("Overpaid");
                     feeRatePriority.setTooltip(new Tooltip("Transaction fees at this rate are likely higher than necessary"));
                     feeRatePriorityGlyph.setStyle("-fx-text-fill: #c8416499");
@@ -966,7 +1083,7 @@ public class SendController extends WalletFormController implements Initializabl
                     feeRatePriorityGlyph.setStyle("-fx-text-fill: #c8416499");
                     feeRatePriorityGlyph.setIcon(FontAwesome5.Glyph.CIRCLE);
                 }
-            } else if(targetBlocks < FeeRatesSource.BLOCKS_IN_HOUR) {
+            } else if (targetBlocks < FeeRatesSource.BLOCKS_IN_HOUR) {
                 feeRatePriority.setText("Medium Priority");
                 feeRatePriority.setTooltip(new Tooltip("Typically confirms within an hour or two"));
                 feeRatePriorityGlyph.setStyle("-fx-text-fill: #fba71b99");
@@ -981,7 +1098,7 @@ public class SendController extends WalletFormController implements Initializabl
     }
 
     private boolean isPayjoinTx() {
-        if(walletTransactionProperty.get() != null) {
+        if (walletTransactionProperty.get() != null) {
             return getPayjoinURI(walletTransactionProperty.get().getPayments()) != null;
         }
 
@@ -989,13 +1106,13 @@ public class SendController extends WalletFormController implements Initializabl
     }
 
     private BitcoinURI getPayjoinURI(List<Payment> payments) {
-        if(getWalletForm().getWallet().getPolicyType() == PolicyType.SINGLE_SP || payments.stream().anyMatch(payment -> payment instanceof SilentPayment)) {
+        if (getWalletForm().getWallet().getPolicyType() == PolicyType.SINGLE_SP || payments.stream().anyMatch(payment -> payment instanceof SilentPayment)) {
             return null;
         }
 
-        for(Payment payment : payments) {
+        for (Payment payment : payments) {
             BitcoinURI payjoinURI = getPayjoinURI(payment.getAddress());
-            if(payjoinURI != null) {
+            if (payjoinURI != null) {
                 return payjoinURI;
             }
         }
@@ -1004,10 +1121,10 @@ public class SendController extends WalletFormController implements Initializabl
     }
 
     private BitcoinURI getPayjoinURI(Address address) {
-        for(Tab tab : paymentTabs.getTabs()) {
-            PaymentController controller = (PaymentController)tab.getUserData();
+        for (Tab tab : paymentTabs.getTabs()) {
+            PaymentController controller = (PaymentController) tab.getUserData();
             BitcoinURI payjoinURI = controller.getPayjoinURI();
-            if(payjoinURI != null && payjoinURI.getAddress().equals(address)) {
+            if (payjoinURI != null && payjoinURI.getAddress().equals(address)) {
                 return payjoinURI;
             }
         }
@@ -1020,17 +1137,17 @@ public class SendController extends WalletFormController implements Initializabl
     }
 
     private void setFiatFeeAmount(CurrencyRate currencyRate, Long amount) {
-        if(amount != null && currencyRate != null && currencyRate.isAvailable() && Config.get().getExchangeSource() != ExchangeSource.NONE) {
+        if (amount != null && currencyRate != null && currencyRate.isAvailable() && Config.get().getExchangeSource() != ExchangeSource.NONE) {
             fiatFeeAmount.set(currencyRate, amount);
         }
     }
 
     private void updateMaxClearButtons(UtxoSelector utxoSelector, TxoFilter txoFilter) {
-        if(utxoSelector instanceof PresetUtxoSelector presetUtxoSelector) {
+        if (utxoSelector instanceof PresetUtxoSelector presetUtxoSelector) {
             int num = presetUtxoSelector.getPresetUtxos().size();
             String selection = " (" + num + " UTXO" + (num != 1 ? "s" : "") + " selected)";
             utxoLabelSelectionProperty.set(selection);
-        } else if(txoFilter instanceof ExcludeTxoFilter excludeTxoFilter) {
+        } else if (txoFilter instanceof ExcludeTxoFilter excludeTxoFilter) {
             int num = excludeTxoFilter.getExcludedTxos().size();
             String exclusion = " (" + num + " UTXO" + (num != 1 ? "s" : "") + " excluded)";
             utxoLabelSelectionProperty.set(exclusion);
@@ -1046,7 +1163,7 @@ public class SendController extends WalletFormController implements Initializabl
     }
 
     private void updateOptimizationButtons(List<Payment> payments) {
-        if(isFakeMixPossible(payments)) {
+        if (isFakeMixPossible(payments)) {
             setPreferredOptimizationStrategy();
             efficiencyToggle.setDisable(false);
             privacyToggle.setDisable(false);
@@ -1060,7 +1177,7 @@ public class SendController extends WalletFormController implements Initializabl
 
     private OptimizationStrategy getPreferredOptimizationStrategy() {
         OptimizationStrategy optimizationStrategy = Config.get().getSendOptimizationStrategy();
-        if(StandardAccount.isWhirlpoolMixAccount(getWalletForm().getWallet().getStandardAccountType()) && !overrideOptimizationStrategy) {
+        if (StandardAccount.isWhirlpoolMixAccount(getWalletForm().getWallet().getStandardAccountType()) && !overrideOptimizationStrategy) {
             optimizationStrategy = OptimizationStrategy.PRIVACY;
         }
 
@@ -1074,7 +1191,7 @@ public class SendController extends WalletFormController implements Initializabl
     }
 
     private void updatePrivacyAnalysis(WalletTransaction walletTransaction) {
-        if(walletTransaction == null) {
+        if (walletTransaction == null) {
             privacyAnalysis.setVisible(false);
             privacyAnalysis.setTooltip(null);
         } else {
@@ -1089,9 +1206,9 @@ public class SendController extends WalletFormController implements Initializabl
 
     public void clear(ActionEvent event) {
         boolean firstTab = true;
-        for(Iterator<Tab> iterator = paymentTabs.getTabs().iterator(); iterator.hasNext(); ) {
-            PaymentController controller = (PaymentController)iterator.next().getUserData();
-            if(firstTab) {
+        for (Iterator<Tab> iterator = paymentTabs.getTabs().iterator(); iterator.hasNext();) {
+            PaymentController controller = (PaymentController) iterator.next().getUserData();
+            if (firstTab) {
                 controller.clear();
                 firstTab = false;
             } else {
@@ -1131,6 +1248,9 @@ public class SendController extends WalletFormController implements Initializabl
         paymentCodeProperty.set(null);
 
         walletAddresses.clear();
+        addDonationCheckBox.setSelected(false);
+        donationMode.getSelectionModel().select(DonationMode.AUTO);
+        updateDonationControls();
     }
 
     public UtxoSelector getUtxoSelector() {
@@ -1185,14 +1305,14 @@ public class SendController extends WalletFormController implements Initializabl
 
     public void createTransaction(ActionEvent event) {
         WalletTransaction walletTransaction = walletTransactionProperty.get();
-        if(log.isDebugEnabled()) {
+        if (log.isDebugEnabled()) {
             Map<WalletNode, List<String>> inputHashes = new LinkedHashMap<>();
-            for(WalletNode node : walletTransaction.getSelectedUtxos().values()) {
+            for (WalletNode node : walletTransaction.getSelectedUtxos().values()) {
                 List<String> nodeHashes = inputHashes.computeIfAbsent(node, k -> new ArrayList<>());
                 nodeHashes.add(ElectrumServer.getScriptHash(node));
             }
             Map<WalletNode, List<String>> changeHash = new LinkedHashMap<>();
-            for(WalletNode changeNode : walletTransaction.getChangeMap().keySet()) {
+            for (WalletNode changeNode : walletTransaction.getChangeMap().keySet()) {
                 changeHash.put(changeNode, List.of(ElectrumServer.getScriptHash(changeNode)));
             }
             log.debug("Creating tx " + walletTransaction.getTransaction().getTxId() + ", expecting notifications for \ninputs \n" + inputHashes + " and \nchange \n" + changeHash);
@@ -1202,7 +1322,7 @@ public class SendController extends WalletFormController implements Initializabl
         walletForm.setCreatedWalletTransaction(walletTransaction);
         PSBT psbt = walletTransaction.createPSBT();
         BitcoinURI payjoinURI = getPayjoinURI(walletTransaction.getPayments());
-        if(payjoinURI != null) {
+        if (payjoinURI != null) {
             AppServices.addPayjoinURI(psbt, payjoinURI);
         }
         EventManager.get().post(new ViewPSBTEvent(createButton.getScene().getWindow(), walletTransaction.getPayments().get(0).getLabel(), null, psbt));
@@ -1219,7 +1339,7 @@ public class SendController extends WalletFormController implements Initializabl
     }
 
     public WalletNode getWalletNode(Address address) {
-        if(walletAddresses.isEmpty()) {
+        if (walletAddresses.isEmpty()) {
             walletAddresses.putAll(getWalletForm().getWallet().getWalletAddresses());
         }
 
@@ -1229,11 +1349,11 @@ public class SendController extends WalletFormController implements Initializabl
     public void broadcastNotification(ActionEvent event) {
         Wallet wallet = getWalletForm().getWallet();
         Storage storage = AppServices.get().getOpenWallets().get(wallet);
-        if(wallet.isEncrypted()) {
+        if (wallet.isEncrypted()) {
             WalletPasswordDialog dlg = new WalletPasswordDialog(wallet.getMasterName(), WalletPasswordDialog.PasswordRequirement.LOAD);
             dlg.initOwner(paymentTabs.getScene().getWindow());
             Optional<SecureString> password = dlg.showAndWait();
-            if(password.isPresent()) {
+            if (password.isPresent()) {
                 Storage.DecryptWalletService decryptWalletService = new Storage.DecryptWalletService(wallet.copy(), password.get());
                 decryptWalletService.setOnSucceeded(workerStateEvent -> {
                     EventManager.get().post(new StorageEvent(storage.getWalletId(wallet), TimedEvent.Action.END, "Done"));
@@ -1291,10 +1411,10 @@ public class SendController extends WalletFormController implements Initializabl
                 transactionMempoolService.setRestartOnFailure(false);
                 transactionMempoolService.setOnSucceeded(mempoolWorkerStateEvent -> {
                     Set<String> scriptHashes = transactionMempoolService.getValue();
-                    if(!scriptHashes.isEmpty()) {
+                    if (!scriptHashes.isEmpty()) {
                         transactionMempoolService.cancel();
                         clear(null);
-                        if(Config.get().isUsePayNym()) {
+                        if (Config.get().isUsePayNym()) {
                             proxyWorker.setMessage("Finding PayNym...");
                             PayNymService.getPayNym(externalPaymentCode.toString()).subscribe(payNym -> {
                                 proxyWorker.end();
@@ -1309,7 +1429,7 @@ public class SendController extends WalletFormController implements Initializabl
                         }
                     }
 
-                    if(transactionMempoolService.getIterationCount() > 5 && transactionMempoolService.isRunning()) {
+                    if (transactionMempoolService.getIterationCount() > 5 && transactionMempoolService.isRunning()) {
                         transactionMempoolService.cancel();
                         proxyWorker.end();
                         log.error("Timeout searching for broadcasted notification transaction");
@@ -1336,7 +1456,7 @@ public class SendController extends WalletFormController implements Initializabl
             proxyWorker.setMessage("Broadcasting notification transaction...");
             proxyWorker.start();
             broadcastTransactionService.start();
-        } catch(Exception e) {
+        } catch (Exception e) {
             log.error("Error creating notification transaction", e);
             AppServices.showErrorDialog("Error creating notification transaction", e.getMessage());
         }
@@ -1349,15 +1469,15 @@ public class SendController extends WalletFormController implements Initializabl
         EventManager.get().post(new ChildWalletsAddedEvent(storage, masterWallet, addedWallets));
 
         BlockTransaction blockTransaction = wallet.getWalletTransaction(transaction.getTxId());
-        if(blockTransaction != null && blockTransaction.getLabel() == null) {
+        if (blockTransaction != null && blockTransaction.getLabel() == null) {
             blockTransaction.setLabel("Link " + (payNym == null ? externalPaymentCode.toAbbreviatedString() : payNym.nymName()));
             TransactionEntry transactionEntry = new TransactionEntry(wallet, blockTransaction, Collections.emptyMap(), Collections.emptyMap());
             EventManager.get().post(new WalletEntryLabelsChangedEvent(wallet, List.of(transactionEntry)));
         }
 
-        if(paymentTabs.getTabs().size() > 0 && !addedWallets.isEmpty()) {
+        if (paymentTabs.getTabs().size() > 0 && !addedWallets.isEmpty()) {
             Wallet addedWallet = addedWallets.stream().filter(w -> w.getScriptType() == ScriptType.P2WPKH).findFirst().orElse(addedWallets.iterator().next());
-            PaymentController controller = (PaymentController)paymentTabs.getTabs().get(0).getUserData();
+            PaymentController controller = (PaymentController) paymentTabs.getTabs().get(0).getUserData();
             controller.setPayNym(payNym == null ? PayNym.fromWallet(addedWallet) : payNym);
         }
 
@@ -1365,9 +1485,9 @@ public class SendController extends WalletFormController implements Initializabl
         successGlyph.getStyleClass().add("success");
         successGlyph.setFontSize(50);
 
-        AppServices.showAlertDialog("Notification Successful", "The notification transaction was successfully sent for payment code " +
-                externalPaymentCode.toAbbreviatedString() + (payNym == null ? "" : " (" + payNym.nymName() + ")") +
-                ".\n\nYou can send to it by entering the payment code, or selecting `PayNym or Payment code` in the Pay to dropdown.", Alert.AlertType.INFORMATION, successGlyph, ButtonType.OK);
+        AppServices.showAlertDialog("Notification Successful", "The notification transaction was successfully sent for payment code "
+                + externalPaymentCode.toAbbreviatedString() + (payNym == null ? "" : " (" + payNym.nymName() + ")")
+                + ".\n\nYou can send to it by entering the payment code, or selecting `PayNym or Payment code` in the Pay to dropdown.", Alert.AlertType.INFORMATION, successGlyph, ButtonType.OK);
     }
 
     public List<Wallet> addChildWallets(PaymentCode externalPaymentCode, PayNym payNym) {
@@ -1375,14 +1495,14 @@ public class SendController extends WalletFormController implements Initializabl
         Wallet masterWallet = getWalletForm().getMasterWallet();
         Storage storage = AppServices.get().getOpenWallets().get(masterWallet);
         List<ScriptType> scriptTypes = PayNym.getSegwitScriptTypes();
-        for(ScriptType childScriptType : scriptTypes) {
+        for (ScriptType childScriptType : scriptTypes) {
             String label = (payNym == null ? externalPaymentCode.toAbbreviatedString() : payNym.nymName()) + " " + childScriptType.getName();
             Wallet addedWallet = masterWallet.addChildWallet(externalPaymentCode, childScriptType, label);
-            if(!storage.isPersisted(addedWallet)) {
+            if (!storage.isPersisted(addedWallet)) {
                 try {
                     storage.saveWallet(addedWallet);
                     EventManager.get().post(new NewChildWalletSavedEvent(storage, masterWallet, addedWallet));
-                } catch(Exception e) {
+                } catch (Exception e) {
                     log.error("Error saving wallet", e);
                     AppServices.showErrorDialog("Error saving wallet " + addedWallet.getName(), e.getMessage());
                 }
@@ -1394,10 +1514,10 @@ public class SendController extends WalletFormController implements Initializabl
     }
 
     private void setInputFieldsDisabled(boolean disablePayments, boolean disableFeeSelection) {
-        for(int i = 0; i < paymentTabs.getTabs().size(); i++) {
+        for (int i = 0; i < paymentTabs.getTabs().size(); i++) {
             Tab tab = paymentTabs.getTabs().get(i);
             tab.setClosable(!disablePayments);
-            PaymentController controller = (PaymentController)tab.getUserData();
+            PaymentController controller = (PaymentController) tab.getUserData();
             controller.setInputFieldsDisabled(disablePayments);
         }
 
@@ -1411,15 +1531,15 @@ public class SendController extends WalletFormController implements Initializabl
 
     @Subscribe
     public void walletNodesChanged(WalletNodesChangedEvent event) {
-        if(event.getWallet().equals(walletForm.getWallet())) {
+        if (event.getWallet().equals(walletForm.getWallet())) {
             clear(null);
         }
     }
 
     @Subscribe
     public void walletHistoryChanged(WalletHistoryChangedEvent event) {
-        if(event.fromThisOrNested(walletForm.getWallet()) && walletForm.getCreatedWalletTransaction() != null) {
-            if(walletForm.getCreatedWalletTransaction().getSelectedUtxos() != null && allSelectedUtxosSpent(event.getAllHistoryChangedNodes())) {
+        if (event.fromThisOrNested(walletForm.getWallet()) && walletForm.getCreatedWalletTransaction() != null) {
+            if (walletForm.getCreatedWalletTransaction().getSelectedUtxos() != null && allSelectedUtxosSpent(event.getAllHistoryChangedNodes())) {
                 clear(null);
             } else {
                 updateTransaction();
@@ -1430,14 +1550,14 @@ public class SendController extends WalletFormController implements Initializabl
     private boolean allSelectedUtxosSpent(List<WalletNode> historyChangedNodes) {
         Set<BlockTransactionHashIndex> unspentUtxos = new HashSet<>(walletForm.getCreatedWalletTransaction().getSelectedUtxos().keySet());
 
-        for(Map.Entry<BlockTransactionHashIndex, WalletNode> selectedUtxoEntry : walletForm.getCreatedWalletTransaction().getSelectedUtxos().entrySet()) {
+        for (Map.Entry<BlockTransactionHashIndex, WalletNode> selectedUtxoEntry : walletForm.getCreatedWalletTransaction().getSelectedUtxos().entrySet()) {
             BlockTransactionHashIndex utxo = selectedUtxoEntry.getKey();
             WalletNode utxoWalletNode = selectedUtxoEntry.getValue();
 
-            for(WalletNode changedNode : historyChangedNodes) {
-                if(utxoWalletNode.equals(changedNode)) {
+            for (WalletNode changedNode : historyChangedNodes) {
+                if (utxoWalletNode.equals(changedNode)) {
                     Optional<BlockTransactionHashIndex> spentTxo = changedNode.getTransactionOutputs().stream().filter(txo -> txo.getHash().equals(utxo.getHash()) && txo.getIndex() == utxo.getIndex() && txo.isSpent()).findAny();
-                    if(spentTxo.isPresent()) {
+                    if (spentTxo.isPresent()) {
                         unspentUtxos.remove(utxo);
                     }
                 }
@@ -1449,7 +1569,7 @@ public class SendController extends WalletFormController implements Initializabl
 
     @Subscribe
     public void walletEntryLabelChanged(WalletEntryLabelsChangedEvent event) {
-        if(event.fromThisOrNested(walletForm.getWallet())) {
+        if (event.fromThisOrNested(walletForm.getWallet())) {
             updateTransaction();
         }
     }
@@ -1458,21 +1578,21 @@ public class SendController extends WalletFormController implements Initializabl
     public void feeRatesUpdated(FeeRatesUpdatedEvent event) {
         blockTargetFeeRatesChart.update(event.getTargetBlockFeeRates());
         blockTargetFeeRatesChart.select(getTargetBlocks());
-        if(targetBlocksField.isVisible()) {
+        if (targetBlocksField.isVisible()) {
             setFeeRate(event.getTargetBlockFeeRates().get(getTargetBlocks()));
         } else {
             setFeeRatePriority(getFeeRangeRate());
         }
         feeRange.updateTrackHighlight();
 
-        if(event.getNextBlockMedianFeeRate() != null) {
+        if (event.getNextBlockMedianFeeRate() != null) {
             recentBlocksView.updateFeeRate(event.getNextBlockMedianFeeRate());
         } else {
             recentBlocksView.updateFeeRate(event.getTargetBlockFeeRates());
         }
 
-        if(updateDefaultFeeRate) {
-            if(getFeeRate() != null && Long.valueOf((long)getFallbackFeeRate()).equals(getFeeRate().longValue())) {
+        if (updateDefaultFeeRate) {
+            if (getFeeRate() != null && Long.valueOf((long) getFallbackFeeRate()).equals(getFeeRate().longValue())) {
                 setDefaultFeeRate();
             }
             updateDefaultFeeRate = false;
@@ -1486,7 +1606,7 @@ public class SendController extends WalletFormController implements Initializabl
 
     @Subscribe
     public void feeRateSelectionChanged(FeeRatesSelectionChangedEvent event) {
-        if(event.getWallet() == getWalletForm().getWallet()) {
+        if (event.getWallet() == getWalletForm().getWallet()) {
             feeRatesSelectionProperty.set(event.getFeeRateSelection());
         }
     }
@@ -1498,31 +1618,31 @@ public class SendController extends WalletFormController implements Initializabl
 
     @Subscribe
     public void spendUtxos(SpendUtxoEvent event) {
-        if((event.getUtxos() == null || !event.getUtxos().isEmpty()) && event.getWallet().equals(getWalletForm().getWallet())) {
-            if(paymentCodeProperty.get() != null) {
+        if ((event.getUtxos() == null || !event.getUtxos().isEmpty()) && event.getWallet().equals(getWalletForm().getWallet())) {
+            if (paymentCodeProperty.get() != null) {
                 clear(null);
             }
 
-            if(event.getPayments() != null) {
+            if (event.getPayments() != null) {
                 clear(null);
                 setPayments(event.getPayments());
-            } else if(paymentTabs.getTabs().size() == 1 && event.getUtxos() != null) {
+            } else if (paymentTabs.getTabs().size() == 1 && event.getUtxos() != null) {
                 Payment payment = new Payment(null, null, event.getUtxos().stream().mapToLong(BlockTransactionHashIndex::getValue).sum(), true);
                 setPayments(List.of(payment));
             }
 
-            if(event.getOpReturns() != null) {
+            if (event.getOpReturns() != null) {
                 opReturnsList.addAll(event.getOpReturns());
             }
 
-            if(event.getFee() != null) {
+            if (event.getFee() != null) {
                 setFeeValueSats(event.getFee());
                 userFeeSet.set(true);
             }
 
             replacedTransactionProperty.set(event.getReplacedTransaction());
 
-            if(event.getUtxos() != null) {
+            if (event.getUtxos() != null) {
                 List<BlockTransactionHashIndex> utxos = event.getUtxos();
                 utxoSelectorProperty.set(new PresetUtxoSelector(utxos, false, event.isRequireAllUtxos()));
             }
@@ -1541,13 +1661,13 @@ public class SendController extends WalletFormController implements Initializabl
 
     @Subscribe
     public void sendPayments(SendPaymentsEvent event) {
-        if(event.getWallet().equals(getWalletForm().getWallet())) {
-            if(event.getPayments() != null) {
+        if (event.getWallet().equals(getWalletForm().getWallet())) {
+            if (event.getPayments() != null) {
                 clear(null);
                 Platform.runLater(() -> {
                     setPayments(event.getPayments());
-                    if(event.getBitcoinURI() != null) {
-                        PaymentController controller = (PaymentController)paymentTabs.getTabs().get(0).getUserData();
+                    if (event.getBitcoinURI() != null) {
+                        PaymentController controller = (PaymentController) paymentTabs.getTabs().get(0).getUserData();
                         controller.setPayjoinURI(event.getBitcoinURI());
                     }
                     updateTransaction(event.getPayments() == null || event.getPayments().stream().anyMatch(Payment::isSendMax));
@@ -1567,11 +1687,11 @@ public class SendController extends WalletFormController implements Initializabl
         transactionDiagram.update(transactionDiagram.getWalletTransaction());
         setEffectiveFeeRate(getWalletTransaction());
         setFeeRate(getFeeRate());
-        if(fee.getTextFormatter() instanceof CoinTextFormatter coinTextFormatter && coinTextFormatter.getUnitFormat() != event.getUnitFormat()) {
+        if (fee.getTextFormatter() instanceof CoinTextFormatter coinTextFormatter && coinTextFormatter.getUnitFormat() != event.getUnitFormat()) {
             Long value = getFeeValueSats(coinTextFormatter.getUnitFormat(), feeAmountUnit.getSelectionModel().getSelectedItem());
             fee.setTextFormatter(new CoinTextFormatter(event.getUnitFormat(), feeAmountUnit.getValue()));
 
-            if(value != null) {
+            if (value != null) {
                 setFeeValueSats(value);
             }
         }
@@ -1580,10 +1700,10 @@ public class SendController extends WalletFormController implements Initializabl
 
     @Subscribe
     public void fiatCurrencySelected(FiatCurrencySelectedEvent event) {
-        if(event.getExchangeSource() == ExchangeSource.NONE) {
+        if (event.getExchangeSource() == ExchangeSource.NONE) {
             fiatFeeAmount.setCurrency(null);
             fiatFeeAmount.setBtcRate(0.0);
-            if(paymentTabs.getTabs().size() > 1) {
+            if (paymentTabs.getTabs().size() > 1) {
                 updateTransaction();
             }
         }
@@ -1592,28 +1712,28 @@ public class SendController extends WalletFormController implements Initializabl
     @Subscribe
     public void exchangeRatesUpdated(ExchangeRatesUpdatedEvent event) {
         setFiatFeeAmount(event.getCurrencyRate(), getFeeValueSats());
-        if(paymentTabs.getTabs().size() > 1) {
+        if (paymentTabs.getTabs().size() > 1) {
             updateTransaction();
         }
     }
 
     @Subscribe
     public void excludeUtxo(ExcludeUtxoEvent event) {
-        if(event.getWalletTransaction() == walletTransactionProperty.get()) {
+        if (event.getWalletTransaction() == walletTransactionProperty.get()) {
             BlockTransaction replacedTransaction = replacedTransactionProperty.get();
-            if(replacedTransaction != null && !getWalletForm().getWallet().isSafeToAddInputsOrOutputs(replacedTransaction)) {
+            if (replacedTransaction != null && !getWalletForm().getWallet().isSafeToAddInputsOrOutputs(replacedTransaction)) {
                 AppServices.showErrorDialog("Cannot Exclude Input", "Removing an input from this replacement transaction could break silent payment outputs as the original output script depends on the input set.");
                 return;
             }
             UtxoSelector utxoSelector = utxoSelectorProperty.get();
-            if(utxoSelector instanceof MaxUtxoSelector) {
+            if (utxoSelector instanceof MaxUtxoSelector) {
                 Collection<BlockTransactionHashIndex> utxos = new ArrayList<>(event.getWalletTransaction().getSelectedUtxos().keySet());
                 utxos.remove(event.getUtxo());
                 PresetUtxoSelector presetUtxoSelector = new PresetUtxoSelector(utxos);
                 presetUtxoSelector.getExcludedUtxos().add(event.getUtxo());
                 utxoSelectorProperty.set(presetUtxoSelector);
                 updateTransaction(true);
-            } else if(utxoSelector instanceof PresetUtxoSelector existingUtxoSelector) {
+            } else if (utxoSelector instanceof PresetUtxoSelector existingUtxoSelector) {
                 PresetUtxoSelector presetUtxoSelector = new PresetUtxoSelector(new ArrayList<>(existingUtxoSelector.getPresetUtxos()), new ArrayList<>(existingUtxoSelector.getExcludedUtxos()));
                 presetUtxoSelector.getPresetUtxos().remove(event.getUtxo());
                 presetUtxoSelector.getExcludedUtxos().add(event.getUtxo());
@@ -1621,7 +1741,7 @@ public class SendController extends WalletFormController implements Initializabl
                 updateTransaction(replacedTransactionProperty.get() == null);
             } else {
                 ExcludeTxoFilter excludeTxoFilter = new ExcludeTxoFilter();
-                if(txoFilterProperty.get() instanceof ExcludeTxoFilter existingTxoFilter) {
+                if (txoFilterProperty.get() instanceof ExcludeTxoFilter existingTxoFilter) {
                     excludeTxoFilter.getExcludedTxos().addAll(existingTxoFilter.getExcludedTxos());
                 }
 
@@ -1634,7 +1754,7 @@ public class SendController extends WalletFormController implements Initializabl
 
     @Subscribe
     public void replaceChangeAddress(ReplaceChangeAddressEvent event) {
-        if(event.getWalletTransaction() == walletTransactionProperty.get()) {
+        if (event.getWalletTransaction() == walletTransactionProperty.get()) {
             excludedChangeNodes.addAll(event.getWalletTransaction().getChangeMap().keySet());
             updateTransaction();
         }
@@ -1642,17 +1762,17 @@ public class SendController extends WalletFormController implements Initializabl
 
     @Subscribe
     public void walletUtxoStatusChanged(WalletUtxoStatusChangedEvent event) {
-        if(event.fromThisOrNested(getWalletForm().getWallet())) {
+        if (event.fromThisOrNested(getWalletForm().getWallet())) {
             UtxoSelector utxoSelector = utxoSelectorProperty.get();
-            if(utxoSelector instanceof MaxUtxoSelector) {
+            if (utxoSelector instanceof MaxUtxoSelector) {
                 updateTransaction(true);
-            } else if(utxoSelector instanceof PresetUtxoSelector existingUtxoSelector) {
+            } else if (utxoSelector instanceof PresetUtxoSelector existingUtxoSelector) {
                 List<BlockTransactionHashIndex> frozenUtxos = event.getUtxos().stream().filter(utxo -> utxo.getStatus() == Status.FROZEN).collect(Collectors.toList());
                 List<BlockTransactionHashIndex> frozenPresetUtxos = existingUtxoSelector.getPresetUtxos().stream()
                         .filter(utxo -> frozenUtxos.stream().anyMatch(frozen -> frozen.getHash().equals(utxo.getHash()) && frozen.getIndex() == utxo.getIndex()))
                         .collect(Collectors.toList());
                 BlockTransaction replacedTransaction = replacedTransactionProperty.get();
-                if(!frozenPresetUtxos.isEmpty() && replacedTransaction != null && !getWalletForm().getWallet().isSafeToAddInputsOrOutputs(replacedTransaction)) {
+                if (!frozenPresetUtxos.isEmpty() && replacedTransaction != null && !getWalletForm().getWallet().isSafeToAddInputsOrOutputs(replacedTransaction)) {
                     //Removing an input could break the silent payment outputs of the replaced transaction, so clear the replacement rather than rebuild it
                     clear(null);
                     return;
@@ -1675,7 +1795,7 @@ public class SendController extends WalletFormController implements Initializabl
 
     @Subscribe
     public void newBlock(NewBlockEvent event) {
-        if(cpfpFeeRate.isVisible()) {
+        if (cpfpFeeRate.isVisible()) {
             updateTransaction();
         }
     }
@@ -1687,7 +1807,7 @@ public class SendController extends WalletFormController implements Initializabl
 
     @Subscribe
     public void connection(ConnectionEvent event) {
-        if(!Objects.equals(event.getMinimumRelayFeeRate(), event.getPreviousMinimumRelayFeeRate())) {
+        if (!Objects.equals(event.getMinimumRelayFeeRate(), event.getPreviousMinimumRelayFeeRate())) {
             feeRange.updateFeeRange(event.getMinimumRelayFeeRate(), event.getPreviousMinimumRelayFeeRate());
             updateTransaction();
         }
@@ -1700,6 +1820,7 @@ public class SendController extends WalletFormController implements Initializabl
     }
 
     private class PrivacyAnalysisTooltip extends VBox {
+
         private final List<Label> analysisLabels = new ArrayList<>();
 
         public PrivacyAnalysisTooltip(WalletTransaction walletTransaction) {
@@ -1713,20 +1834,20 @@ public class SendController extends WalletFormController implements Initializabl
             boolean addressReuse = walletNodePayments.stream().anyMatch(walletNodePayment -> !walletNodePayment.getWalletNode().getTransactionOutputs().isEmpty());
             boolean payjoinPresent = getPayjoinURI(userPayments) != null;
 
-            if(optimizationStrategy == OptimizationStrategy.PRIVACY) {
-                if(fakeMixPresent) {
+            if (optimizationStrategy == OptimizationStrategy.PRIVACY) {
+                if (fakeMixPresent) {
                     addLabel("Appears as a two person coinjoin", getPlusGlyph());
                 } else {
-                    if(mixedAddressTypes) {
+                    if (mixedAddressTypes) {
                         addLabel("Cannot fake coinjoin due to mixed address types", getInfoGlyph());
-                    } else if(userPayments.size() > 1) {
+                    } else if (userPayments.size() > 1) {
                         addLabel("Cannot fake coinjoin due to multiple payments", getInfoGlyph());
-                    } else if(payjoinPresent) {
+                    } else if (payjoinPresent) {
                         addLabel("Cannot fake coinjoin due to payjoin", getInfoGlyph());
                     } else {
-                        if(utxoSelectorProperty().get() instanceof MaxUtxoSelector) {
+                        if (utxoSelectorProperty().get() instanceof MaxUtxoSelector) {
                             addLabel("Cannot fake coinjoin with max amount selected", getInfoGlyph());
-                        } else if(utxoSelectorProperty().get() != null) {
+                        } else if (utxoSelectorProperty().get() != null) {
                             addLabel("Cannot fake coinjoin due to coin control", getInfoGlyph());
                         } else {
                             addLabel("Cannot fake coinjoin due to insufficient funds", getInfoGlyph());
@@ -1735,23 +1856,23 @@ public class SendController extends WalletFormController implements Initializabl
                 }
             }
 
-            if(mixedAddressTypes) {
+            if (mixedAddressTypes) {
                 addLabel("Address types different to the wallet indicate external payments", getMinusGlyph());
             }
 
-            if(roundPaymentAmounts && !fakeMixPresent) {
+            if (roundPaymentAmounts && !fakeMixPresent) {
                 addLabel("Rounded payment amounts indicate external payments", getMinusGlyph());
             }
 
-            if(addressReuse) {
+            if (addressReuse) {
                 addLabel("Address reuse detected", getMinusGlyph());
             }
 
-            if(!fakeMixPresent && !mixedAddressTypes && !roundPaymentAmounts) {
+            if (!fakeMixPresent && !mixedAddressTypes && !roundPaymentAmounts) {
                 addLabel("Appears as a possible self transfer", getPlusGlyph());
             }
 
-            analysisLabels.sort(Comparator.comparingInt(o -> (Integer)o.getGraphic().getUserData()));
+            analysisLabels.sort(Comparator.comparingInt(o -> (Integer) o.getGraphic().getUserData()));
             getChildren().addAll(analysisLabels);
             setSpacing(5);
         }

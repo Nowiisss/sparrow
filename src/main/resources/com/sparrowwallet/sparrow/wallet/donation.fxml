@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.scene.control.*?>
+<?import javafx.scene.layout.*?>
+<?import javafx.geometry.Insets?>
+<?import javafx.collections.FXCollections?>
+<?import tornadofx.control.Form?>
+<?import tornadofx.control.Fieldset?>
+<?import tornadofx.control.Field?>
+<?import com.sparrowwallet.drongo.BitcoinUnit?>
+
+<GridPane
+        styleClass="send-form"
+        hgap="10.0"
+        vgap="10.0"
+        stylesheets="@send.css, @wallet.css, @../script.css, @../general.css"
+        xmlns="http://javafx.com/javafx/10.0.2-internal"
+        xmlns:fx="http://javafx.com/fxml/1"
+        fx:controller="com.sparrowwallet.sparrow.wallet.DonationController">
+
+    <padding>
+        <Insets top="10.0" bottom="10.0"/>
+    </padding>
+
+    <columnConstraints>
+        <ColumnConstraints prefWidth="610" hgrow="SOMETIMES"/>
+    </columnConstraints>
+
+    <Form GridPane.columnIndex="0" GridPane.rowIndex="0">
+        <Fieldset inputGrow="ALWAYS">
+
+            <Field text="Contact:">
+                <ComboBox fx:id="contact"/>
+            </Field>
+
+            <Field text="Amount:">
+                <TextField fx:id="amount" styleClass="amount-field"/>
+
+                <ComboBox fx:id="amountUnit" styleClass="amount-unit">
+                    <items>
+                        <FXCollections fx:factory="observableArrayList">
+                            <BitcoinUnit fx:constant="BTC"/>
+                            <BitcoinUnit fx:constant="SATOSHIS"/>
+                        </FXCollections>
+                    </items>
+                </ComboBox>
+            </Field>
+
+        </Fieldset>
+    </Form>
+
+</GridPane>

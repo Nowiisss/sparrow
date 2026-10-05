@@ -39,6 +39,11 @@
     -fx-max-width: 76px;
 }
 
+.donation-mode {
+    -fx-min-width: 100px;
+    -fx-pref-width: 100px;
+}
+
 .feeRatesChart {
     -fx-max-width: 335px;
     -fx-max-height: 130px;

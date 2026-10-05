@@ -67,6 +67,8 @@
                         <graphic>
                             <Glyph fontFamily="Font Awesome 5 Free Solid" fontSize="12" icon="EXCLAMATION_CIRCLE" styleClass="failure" />
                         </graphic>
+
+                        
                     </Label>
                     <Label fx:id="dustStatus" text="Amount too low">
                         <tooltip>
