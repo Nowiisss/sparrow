@@ -8,42 +8,44 @@
 <?import tornadofx.control.Fieldset?>
 <?import tornadofx.control.Field?>
 <?import com.sparrowwallet.drongo.BitcoinUnit?>
+<?import com.sparrowwallet.sparrow.control.FiatLabel?>
 
 <GridPane
-        styleClass="send-form"
-        hgap="10.0"
-        vgap="10.0"
-        stylesheets="@send.css, @wallet.css, @../script.css, @../general.css"
-        xmlns="http://javafx.com/javafx/10.0.2-internal"
-        xmlns:fx="http://javafx.com/fxml/1"
-        fx:controller="com.sparrowwallet.sparrow.wallet.DonationController">
+    styleClass="send-form"
+    hgap="10.0"
+    vgap="10.0"
+    stylesheets="@send.css, @wallet.css, @../script.css, @../general.css"
+    xmlns="http://javafx.com/javafx/10.0.2-internal"
+    xmlns:fx="http://javafx.com/fxml/1"
+    fx:controller="com.sparrowwallet.sparrow.wallet.DonationController">
 
     <padding>
-        <Insets top="10.0" bottom="10.0"/>
+        <Insets top="10.0" bottom="10.0" />
     </padding>
 
     <columnConstraints>
-        <ColumnConstraints prefWidth="610" hgrow="SOMETIMES"/>
+        <ColumnConstraints prefWidth="610" hgrow="SOMETIMES" />
     </columnConstraints>
 
     <Form GridPane.columnIndex="0" GridPane.rowIndex="0">
         <Fieldset inputGrow="ALWAYS">
 
             <Field text="Contact:">
-                <ComboBox fx:id="contact"/>
+                <ComboBox fx:id="contact" />
             </Field>
 
             <Field text="Amount:">
-                <TextField fx:id="amount" styleClass="amount-field"/>
+                <TextField fx:id="amount" styleClass="amount-field" />
 
                 <ComboBox fx:id="amountUnit" styleClass="amount-unit">
                     <items>
                         <FXCollections fx:factory="observableArrayList">
-                            <BitcoinUnit fx:constant="BTC"/>
-                            <BitcoinUnit fx:constant="SATOSHIS"/>
+                            <BitcoinUnit fx:constant="BTC" />
+                            <BitcoinUnit fx:constant="SATOSHIS" />
                         </FXCollections>
                     </items>
                 </ComboBox>
+                <FiatLabel fx:id="fiatAmount" />
             </Field>
 
         </Fieldset>

@@ -310,6 +310,7 @@ public class SendController extends WalletFormController implements Initializabl
         );
         donationTabs.getTabs().addListener((ListChangeListener<Tab>) change -> {
             updateDonationTabs();
+            updateTransaction();
         });
 
         donationMode.getSelectionModel().select(DonationMode.AUTO);
@@ -463,8 +464,13 @@ public class SendController extends WalletFormController implements Initializabl
         walletTransactionProperty.addListener((observable, oldValue, walletTransaction) -> {
             setEffectiveFeeRate(walletTransaction);
             if (walletTransaction != null) {
-                setPayments(walletTransaction.getPayments().stream().filter(payment -> payment.getType() != Payment.Type.FAKE_MIX).collect(Collectors.toList()));
+                // Volem que només detecti com a payment el que no sigui donationTab (que sempre estan al final)
+                List<Payment> uiPayments = walletTransaction.getPayments().stream()
+                        .filter(payment -> payment.getType() != Payment.Type.FAKE_MIX)
+                        .limit(paymentTabs.getTabs().size())
+                        .collect(Collectors.toList());
 
+                setPayments(uiPayments);
                 double feeRate = walletTransaction.getFeeRate();
                 if (userFeeSet.get()) {
                     setTargetBlocks(getTargetBlocks(feeRate));
@@ -645,6 +651,18 @@ public class SendController extends WalletFormController implements Initializabl
             tab.setContent(donationLoader.load());
 
             DonationController controller = donationLoader.getController();
+
+            controller.amountProperty().addListener((obs, oldValue, newValue) -> {
+                updateTransaction();
+            });
+
+            controller.selectedContactProperty().addListener((obs, oldValue, newValue) -> {
+                updateTransaction();
+            });
+
+            controller.amountUnitProperty().addListener((obs, oldValue, newValue) -> {
+                updateTransaction();
+            });
             tab.setUserData(controller);
 
             return tab;
@@ -658,6 +676,20 @@ public class SendController extends WalletFormController implements Initializabl
         for (Tab tab : paymentTabs.getTabs()) {
             PaymentController controller = (PaymentController) tab.getUserData();
             payments.add(controller.getPayment());
+        }
+
+        return payments;
+    }
+
+    private List<Payment> getDonationPayments() {
+        List<Payment> payments = new ArrayList<>();
+
+        for (Tab tab : donationTabs.getTabs()) {
+            DonationController controller = (DonationController) tab.getUserData();
+
+            if (controller.isValidDonation()) {
+                payments.add(controller.getDonationPayment());
+            }
         }
 
         return payments;
@@ -720,8 +752,10 @@ public class SendController extends WalletFormController implements Initializabl
 
         try {
             // Si no t'han passat explícitament uns payments llegeix els que hi hagi actualment
-            // DESTINATARIS ALS QUE VOLEM PAGAR
-            List<Payment> payments = transactionPayments != null ? transactionPayments : getPayments();
+            // DESTINATARIS ALS QUE VOLEM PAGAR + DONACIONS !!!
+            List<Payment> payments = new ArrayList<>(transactionPayments != null ? transactionPayments : getPayments());
+            payments.addAll(getDonationPayments());
+
             updateOptimizationButtons(payments);
             if (!userFeeSet.get() || getFeeValueSats() != null) {
                 Wallet wallet = getWalletForm().getWallet();

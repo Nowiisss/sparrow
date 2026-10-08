@@ -8,7 +8,9 @@ import com.sparrowwallet.drongo.protocol.Transaction;
 import com.sparrowwallet.drongo.protocol.TransactionOutput;
 import com.sparrowwallet.drongo.silentpayments.SilentPayment;
 import com.sparrowwallet.drongo.silentpayments.SilentPaymentAddress;
+import com.sparrowwallet.sparrow.AppServices;
 import com.sparrowwallet.sparrow.UnitFormat;
+import com.sparrowwallet.sparrow.control.FiatLabel;
 import com.sparrowwallet.sparrow.io.Config;
 
 import javafx.fxml.FXML;
@@ -27,9 +29,20 @@ public class DonationController {
     private ComboBox<BitcoinUnit> amountUnit;
 
     @FXML
+    private FiatLabel fiatAmount;
+
+    @FXML
     private void initialize() {
         contact.getItems().setAll(getDonationContacts());
         amountUnit.getSelectionModel().select(BitcoinUnit.SATOSHIS);
+
+        amount.textProperty().addListener((obs, oldValue, newValue) -> {
+            updateFiatAmount();
+        });
+
+        amountUnit.valueProperty().addListener((obs, oldValue, newValue) -> {
+            updateFiatAmount();
+        });
     }
 
     private List<DonationContact> getDonationContacts() {
@@ -144,5 +157,36 @@ public class DonationController {
                 txOutput,
                 Transaction.DUST_RELAY_TX_FEE
         );
+    }
+
+    // Perque el listener de sendController funcioni per actualitzar diagrama en funció de les modificacions dels parametres de donació 
+    // a partir de coses que son privades a donació
+    public javafx.beans.property.StringProperty amountProperty() {
+        return amount.textProperty();
+    }
+
+    public javafx.beans.property.ObjectProperty<DonationContact> selectedContactProperty() {
+        return contact.valueProperty();
+    }
+
+    public javafx.beans.property.ObjectProperty<BitcoinUnit> amountUnitProperty() {
+        return amountUnit.valueProperty();
+    }
+
+    private void updateFiatAmount() {
+        try {
+            Long value = getDonationValueSats();
+
+            if (value != null) {
+                fiatAmount.set(
+                        AppServices.getFiatCurrencyExchangeRate(),
+                        value
+                );
+            } else {
+                fiatAmount.setText("");
+            }
+        } catch (Exception e) {
+            fiatAmount.setText("");
+        }
     }
 }
