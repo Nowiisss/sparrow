@@ -1,4 +1,4 @@
-package com.sparrowwallet.sparrow.wallet;
+package com.sparrowwallet.sparrow.wallet.donation;
 
 public enum DonationMode {
     AUTO,

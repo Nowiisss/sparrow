@@ -1,0 +1,90 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.collections.FXCollections?>
+<?import javafx.geometry.Insets?>
+<?import javafx.scene.control.*?>
+<?import javafx.scene.layout.*?>
+
+<?import tornadofx.control.Form?>
+<?import tornadofx.control.Fieldset?>
+<?import tornadofx.control.Field?>
+
+<?import com.sparrowwallet.drongo.BitcoinUnit?>
+<?import com.sparrowwallet.sparrow.control.FiatLabel?>
+<?import com.sparrowwallet.sparrow.control.IntegerSpinner?>
+
+<BorderPane
+    stylesheets="@settings.css, @wallet.css, @../script.css, @../descriptor.css, @../general.css"
+    styleClass="line-border"
+    xmlns="http://javafx.com/javafx"
+    xmlns:fx="http://javafx.com/fxml"
+    fx:controller="com.sparrowwallet.sparrow.wallet.donation.AutoDonationController">
+
+    <center>
+        <VBox spacing="15">
+            <padding>
+                <Insets top="20" right="25" bottom="20" left="25"/>
+            </padding>
+
+            <Label fx:id="information" wrapText="true"/>
+
+            <Form>
+                <Fieldset text="Donation Budget"
+                          styleClass="relaxedLabelFieldSet">
+
+                    <Field text="Budget:">
+                        <TextField fx:id="budgetAmount"
+                                   styleClass="amount-field"
+                                   prefWidth="170"/>
+
+                        <ComboBox fx:id="budgetUnit"
+                                  styleClass="amount-unit">
+                            <items>
+                                <FXCollections fx:factory="observableArrayList">
+                                    <BitcoinUnit fx:constant="BTC"/>
+                                    <BitcoinUnit fx:constant="SATOSHIS"/>
+                                </FXCollections>
+                            </items>
+                        </ComboBox>
+
+                        <FiatLabel fx:id="fiatBudget"/>
+                    </Field>
+
+                </Fieldset>
+
+                <Fieldset text="Donation Recipients"
+                          styleClass="relaxedLabelFieldSet">
+
+                    <Field text="Recipients:">
+                        <VBox spacing="10">
+
+                            <VBox fx:id="recipientsBox" spacing="6">
+                                <Label text="No recipients loaded yet."/>
+                            </VBox>
+
+                            <Button fx:id="manageContactsButton"
+                                    text="Manage Contacts..."
+                                    disable="true"/>
+
+                        </VBox>
+                    </Field>
+
+                </Fieldset>
+
+                <Fieldset text="Donation Horizon"
+                          styleClass="relaxedLabelFieldSet">
+
+                    <Field text="Cycle length:">
+                        <IntegerSpinner fx:id="transactionHorizon"
+                                        editable="true"
+                                        prefWidth="100"/>
+
+                        <Label text="outgoing transactions"/>
+                    </Field>
+                </Fieldset>
+            </Form>
+
+        </VBox>
+    </center>
+
+</BorderPane>

@@ -14,7 +14,11 @@
 <?import org.controlsfx.glyphfont.Glyph?>
 
 <?import com.sparrowwallet.sparrow.control.HelpLabel?>
-<BorderPane stylesheets="@settings.css, @wallet.css, @../script.css, @../descriptor.css, @../general.css" styleClass="wallet-pane" xmlns="http://javafx.com/javafx/10.0.2-internal" xmlns:fx="http://javafx.com/fxml/1" fx:controller="com.sparrowwallet.sparrow.wallet.SettingsController">
+<BorderPane
+    stylesheets="@settings.css, @wallet.css, @../script.css, @../descriptor.css, @../general.css"
+    styleClass="wallet-pane" xmlns="http://javafx.com/javafx/10.0.2-internal"
+    xmlns:fx="http://javafx.com/fxml/1"
+    fx:controller="com.sparrowwallet.sparrow.wallet.SettingsController">
     <center>
         <GridPane hgap="10.0" vgap="10.0">
             <padding>
@@ -41,7 +45,8 @@
                                 </FXCollections>
                             </items>
                         </ComboBox>
-                        <HelpLabel helpText="Single signature wallets use a single keystore (hardware wallet or seed).\nMultisignature wallets require multiple keystores, of which a certain number need to sign.\nSilent Payments wallets also use a single keystore and can receive privately to a reusable address." />
+                        <HelpLabel
+                            helpText="Single signature wallets use a single keystore (hardware wallet or seed).\nMultisignature wallets require multiple keystores, of which a certain number need to sign.\nSilent Payments wallets also use a single keystore and can receive privately to a reusable address." />
                     </Field>
                     <Field text="Script Type:">
                         <ComboBox fx:id="scriptType">
@@ -57,7 +62,8 @@
                                 </FXCollections>
                             </items>
                         </ComboBox>
-                        <HelpLabel helpText="Native Segwit the type chosen for most new wallets.\nTaproot is a newer type useful for specific needs.\nNested Segwit and Legacy are useful for recovering older wallets.\nFor existing wallets, be sure to choose the type that matches the wallet you are restoring." />
+                        <HelpLabel
+                            helpText="Native Segwit the type chosen for most new wallets.\nTaproot is a newer type useful for specific needs.\nNested Segwit and Legacy are useful for recovering older wallets.\nFor existing wallets, be sure to choose the type that matches the wallet you are restoring." />
                     </Field>
                 </Fieldset>
             </Form>
@@ -65,11 +71,13 @@
             <Form GridPane.columnIndex="1" GridPane.rowIndex="0">
                 <Fieldset inputGrow="SOMETIMES" text="" fx:id="multisigFieldset">
                     <Field text="Cosigners:">
-                        <RangeSlider fx:id="multisigControl" showTickMarks="true" showTickLabels="true" blockIncrement="1" min="1" max="9" highValue="3" lowValue="2" snapToTicks="true" majorTickUnit="1" minorTickCount="0" />
+                        <RangeSlider fx:id="multisigControl" showTickMarks="true"
+                            showTickLabels="true" blockIncrement="1" min="1" max="9" highValue="3"
+                            lowValue="2" snapToTicks="true" majorTickUnit="1" minorTickCount="0" />
                     </Field>
                     <Field text="M of N:">
                         <CopyableLabel fx:id="multisigLowLabel" />
-                        <CopyableLabel text="/"/>
+                        <CopyableLabel text="/" />
                         <CopyableLabel fx:id="multisigHighLabel" />
                     </Field>
                 </Fieldset>
@@ -80,12 +88,14 @@
                     <Field text="Descriptor:">
                         <VirtualizedScrollPane hbarPolicy="NEVER" vbarPolicy="NEVER">
                             <content>
-                                <DescriptorArea fx:id="descriptor" editable="false" styleClass="uneditable-codearea" prefHeight="27" maxHeight="27" />
+                                <DescriptorArea fx:id="descriptor" editable="false"
+                                    styleClass="uneditable-codearea" prefHeight="27" maxHeight="27" />
                             </content>
                         </VirtualizedScrollPane>
                         <Button fx:id="scanDescriptorQR" onAction="#scanDescriptorQR">
                             <graphic>
-                                <Glyph fontFamily="Font Awesome 5 Free Solid" fontSize="12" icon="CAMERA" />
+                                <Glyph fontFamily="Font Awesome 5 Free Solid" fontSize="12"
+                                    icon="CAMERA" />
                             </graphic>
                             <tooltip>
                                 <Tooltip text="Scan a QR code" />
@@ -93,7 +103,8 @@
                         </Button>
                         <Button fx:id="showDescriptorQR" onAction="#showDescriptorQR">
                             <graphic>
-                                <Glyph fontFamily="Font Awesome 5 Free Solid" fontSize="12" icon="QRCODE" />
+                                <Glyph fontFamily="Font Awesome 5 Free Solid" fontSize="12"
+                                    icon="QRCODE" />
                             </graphic>
                             <tooltip>
                                 <Tooltip text="Show as QR code" />
@@ -104,14 +115,30 @@
                     </Field>
                 </Fieldset>
             </Form>
+            <Form GridPane.columnIndex="0"
+                GridPane.columnSpan="2"
+                GridPane.rowIndex="2">
 
-            <Form GridPane.columnIndex="0" GridPane.columnSpan="2" GridPane.rowIndex="2">
+                <Fieldset inputGrow="SOMETIMES" text="Auto Donations">
+                    <VBox>
+                        <padding>
+                            <Insets top="10" />
+                        </padding>
+
+                        <Button text="Manage Settings..."
+                            onAction="#showAutoDonations" />
+                    </VBox>
+                </Fieldset>
+
+            </Form>
+
+            <Form GridPane.columnIndex="0" GridPane.columnSpan="2" GridPane.rowIndex="3">
                 <Fieldset inputGrow="SOMETIMES" text="Keystores">
-                        <StackPane styleClass="keystore-padding-border">
-                            <StackPane styleClass="etched-raised-border">
-                                <StackPane fx:id="keystoreTabsPane"/>
-                            </StackPane>
+                    <StackPane styleClass="keystore-padding-border">
+                        <StackPane styleClass="etched-raised-border">
+                            <StackPane fx:id="keystoreTabsPane" />
                         </StackPane>
+                    </StackPane>
                 </Fieldset>
             </Form>
         </GridPane>

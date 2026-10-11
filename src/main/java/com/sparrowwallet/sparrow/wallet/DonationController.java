@@ -16,6 +16,7 @@ import com.sparrowwallet.sparrow.io.Config;
 import javafx.fxml.FXML;
 import javafx.scene.control.ComboBox;
 import javafx.scene.control.TextField;
+import com.sparrowwallet.sparrow.wallet.donation.DonationContact;
 
 public class DonationController {
 

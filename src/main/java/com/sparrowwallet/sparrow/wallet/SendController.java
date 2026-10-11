@@ -62,6 +62,7 @@ import java.text.DecimalFormat;
 import java.util.*;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
+import com.sparrowwallet.sparrow.wallet.donation.DonationMode;
 
 import static com.sparrowwallet.sparrow.AppServices.*;
 
